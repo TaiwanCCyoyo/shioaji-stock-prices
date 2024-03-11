@@ -1,0 +1,12 @@
+# python
+__pycache__
+
+# log
+*.log
+
+# 暫存檔股票資料
+data/*.csv
+data/stock_symbol_mapping.json5
+
+# API
+*.key
