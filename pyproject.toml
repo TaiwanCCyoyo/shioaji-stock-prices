@@ -1,0 +1,12 @@
+[project]
+name = "shioaji-stock-project"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "ipykernel>=6.30.1",
+    "numpy>=2.3.2",
+    "pandas>=2.3.2",
+    "python-dotenv>=1.1.1",
+    "rich>=14.1.0",
+    "shioaji>=1.2.7",
+]
