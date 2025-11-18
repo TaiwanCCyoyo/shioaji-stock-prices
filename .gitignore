@@ -9,4 +9,7 @@ data/*.csv
 data/stock_symbol_mapping.json5
 
 # API
-*.key
+.env
+
+# uv
+.venv
