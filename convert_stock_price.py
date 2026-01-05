@@ -11,18 +11,16 @@ Shioaji Stock Price
 
 import os
 from config import config
+import logging
 import pandas as pd
 import re
 from concurrent.futures import ProcessPoolExecutor
 
 
-from utils.user_logger.user_logger import get_logger
-
-# Setup Logger
-logger = get_logger("shioaji.log")
+from shp_utils.user_logger.user_logger import get_logger
 
 
-def process_min_file(min_file, data_dir):
+def process_min_file(min_file: str, data_dir: str) -> str:
     pass
     """
     生成單一 _min.csv 檔案對應的日K資料。
@@ -35,7 +33,7 @@ def process_min_file(min_file, data_dir):
         None
     """
     day_file = re.sub(r"_min\.csv$", r"_day.csv", min_file)
-    logger.info(f"將{min_file}轉成{day_file}")
+    result_msg = f"將{min_file}轉成{day_file}"
 
     # 讀取分K資料
     min_data = pd.read_csv(os.path.join(data_dir, min_file))
@@ -64,9 +62,11 @@ def process_min_file(min_file, data_dir):
 
     # 將生成的日K資料存儲到 _day.csv 檔案
     day_data.to_csv(os.path.join(data_dir, day_file), index=True)
+    return result_msg
 
 
-def process_all():
+def process_all(logger: logging.Logger) -> None:
+
     # 取得資料夾中的所有 _min.csv 檔案
     if not os.path.exists(config.DATA_DIR):
         logger.error(f"Data directory {config.DATA_DIR} does not exist.")
@@ -83,8 +83,15 @@ def process_all():
     # 使用 ProcessPoolExecutor 建立 process pool
     with ProcessPoolExecutor() as executor:
         # 將任務送至 process pool 中執行
-        executor.map(process_min_file, min_files, [config.DATA_DIR] * len(min_files))
+        results = executor.map(process_min_file, min_files, [config.DATA_DIR] * len(min_files))
+
+        # 統一由主程序寫 Log，避免多程序競爭檔案寫入權限 (Windows常見問題)
+        for res in results:
+            if res:
+                logger.info(res)
 
 
 if __name__ == "__main__":
-    process_all()
+    # Setup Logger
+    logger = get_logger("shioaji.log")
+    process_all(logger)

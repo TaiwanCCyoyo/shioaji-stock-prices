@@ -7,13 +7,10 @@ import re
 import json5
 from config import config
 from dotenv import load_dotenv
-from utils.user_logger.user_logger import get_logger
-
-# Setup Logger
-logger = get_logger("shioaji.log")
+import logging
 
 
-def get_contract_list(api, stock_category):
+def get_contract_list(api: sj.Shioaji, stock_category: dict) -> list:
     """取得代下載的股票列表"""
     TSE_contract_list = api.Contracts.Stocks.TSE
     OTC_contract_list = api.Contracts.Stocks.OTC
@@ -50,7 +47,7 @@ def get_contract_list(api, stock_category):
     return contract_list
 
 
-def update_stock_symbol_mapping(api):
+def update_stock_symbol_mapping(api: sj.Shioaji, logger: logging.Logger) -> None:
     """更新並儲存股號股名對照表"""
     all_contracts = []
     all_contracts.extend(api.Contracts.Stocks.TSE)
@@ -63,15 +60,16 @@ def update_stock_symbol_mapping(api):
 
     with open(config.STOCK_SYMBOL_MAPPING, "w", encoding="utf-8") as f:
         json5.dump(stock_symbol_mapping, f, ensure_ascii=False, indent=4)
-    print(f"對照表已經儲存至 {config.STOCK_SYMBOL_MAPPING}")
+    logger.info(f"對照表已經儲存至 {config.STOCK_SYMBOL_MAPPING}")
 
 
-def main():
+def main(logger: logging.Logger) -> None:
+
     load_dotenv()
 
     # 檢查 API key 是否存在
     if "API_KEY" not in os.environ or "SECRET_KEY" not in os.environ:
-        print("Error: API_KEY or SECRET_KEY not found in environment variables.")
+        logger.error("Error: API_KEY or SECRET_KEY not found in environment variables.")
         return
 
     api = sj.Shioaji()
@@ -91,7 +89,7 @@ def main():
             stock_category = {"TSE": {}, "OTC": {}}
 
         # 更新 Symbol Mapping
-        update_stock_symbol_mapping(api)
+        update_stock_symbol_mapping(api, logger)
 
         # 取得下載清單
         contract_list = get_contract_list(api, stock_category)
@@ -114,7 +112,7 @@ def main():
             start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
 
             if os.path.isfile(stock_file):
-                print(f"讀取{contract.name} ({contract.code}) 的資料")
+                logger.debug(f"讀取{contract.name} ({contract.code}) 的資料")
                 try:
                     df = pd.read_csv(stock_file)
                     df.ts = pd.to_datetime(df.ts)
@@ -124,13 +122,13 @@ def main():
                         start_date_str = (last_ts + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
                         start_date = datetime.datetime.strptime(f"{start_date_str} 08:00", "%Y-%m-%d %H:%M")
                 except Exception as e:
-                    print(f"警告: {stock_file} 讀取失敗，可能是檔案損毀 ({e})")
-                    print("將重新下載此檔完整資料...")
+                    logger.warning(f"警告: {stock_file} 讀取失敗，可能是檔案損毀 ({e})")
+                    logger.info("將重新下載此檔完整資料...")
 
                     # 把壞掉的檔案改名備份 (例如 xx.csv.bak)，避免影響後續流程
                     try:
                         os.rename(stock_file, stock_file + ".bak")
-                        print(f"已將損毀檔案備份為: {stock_file}.bak")
+                        logger.info(f"已將損毀檔案備份為: {stock_file}.bak")
                     except OSError:
                         pass
 
@@ -143,30 +141,30 @@ def main():
             # 比較時若 start_date day >= today day?
             # 原邏輯: if start_date >= today_date:
             if start_date >= today_date:
-                print(f"跳過{contract.name} ({contract.code}) 因為已經擁有 {start_date_str} 之前的資料")
+                logger.info(f"跳過{contract.name} ({contract.code}) 因為已經擁有 {start_date_str} 之前的資料")
                 continue
 
             success = False
             df_new = pd.DataFrame()
-            print(f"嘗試取得{contract.name} ({contract.code}) 從 {start_date_str} 到 {today_str} 的資料")
+            logger.info(f"嘗試取得{contract.name} ({contract.code}) 從 {start_date_str} 到 {today_str} 的資料")
 
             stock_get_start = datetime.datetime.now()
             try:
                 kbars = api.kbars(contract=contract, start=start_date_str, end=today_str)
                 df_new = pd.DataFrame({**kbars})
             except Exception as e:
-                print(f"取得失敗: {e}")
+                logger.error(f"取得失敗: {e}")
                 df_new = pd.DataFrame()  # Ensure empty df
 
             stock_get_end = datetime.datetime.now()
-            print(f"共花費: {(stock_get_end - stock_get_start).total_seconds()} 秒")
+            logger.debug(f"共花費: {(stock_get_end - stock_get_start).total_seconds()} 秒")
 
             # 檢查流量
             if df_new.empty:
                 try:
                     usage_bytes = api.usage().bytes
                     if usage_bytes >= 524288000:  # 500MB limit
-                        print(f"今日已使用 {usage_bytes} B (達上限)")
+                        logger.warning(f"今日已使用 {usage_bytes} B (達上限)")
                         downloadable = False
                 except Exception:
                     pass
@@ -174,32 +172,32 @@ def main():
                 success = True
 
             if not downloadable:
-                print("流量已達上限，停止下載。")
+                logger.warning("流量已達上限，停止下載。")
                 break
 
             if not success:
-                print(f"跳過{contract.name} ({contract.code}) 因為從 {start_date_str} 到 {today_str} 的資料取得失敗")
+                logger.warning(f"跳過{contract.name} ({contract.code}) 因為從 {start_date_str} 到 {today_str} 的資料取得失敗")
                 continue
 
             # 合併並存檔
             if os.path.isfile(stock_file):
-                print(f"再次讀取{contract.name} ({contract.code}) 的資料")
+                logger.debug(f"再次讀取{contract.name} ({contract.code}) 的資料")
                 try:
                     df_old = pd.read_csv(stock_file)
-                    print("合併資料")
+                    logger.debug("合併資料")
                     # concat logic
                     df_final = pd.concat([df_old, df_new], axis=0)
                 except Exception as e:
-                    print(f"{stock_file} 合併失敗: {e}")
+                    logger.error(f"{stock_file} 合併失敗: {e}")
                     raise e
             else:
                 df_final = df_new
 
             try:
-                print("將資料存儲到本地股票資料")
+                logger.info("將資料存儲到本地股票資料")
                 df_final.to_csv(stock_file, index=False)
             except Exception as e:
-                print(f"{stock_file} 儲存失敗: {e}")
+                logger.error(f"{stock_file} 儲存失敗: {e}")
                 # 原邏輯有嘗試刪除檔案，這有點危險，暫時保留原邏輯
                 try:
                     os.remove(stock_file)
@@ -207,14 +205,16 @@ def main():
                     pass
 
         end_time = datetime.datetime.now()
-        print(f"結束: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
-        print(f"程式共花費: {(end_time - start_time).total_seconds()} 秒")
+        logger.info(f"結束: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+        logger.info(f"程式共花費: {(end_time - start_time).total_seconds()} 秒")
 
     except Exception as e:
-        print(f"發生未預期錯誤: {e}")
+        logger.error(f"發生未預期錯誤: {e}")
     finally:
         api.logout()
 
 
 if __name__ == "__main__":
-    main()
+    from shp_utils.user_logger.user_logger import get_logger
+    logger = get_logger("shioaji.log")
+    main(logger)

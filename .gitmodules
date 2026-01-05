@@ -1,3 +1,3 @@
 [submodule "utils/user_logger"]
-	path = utils/user_logger
+	path = shp_utils/user_logger
 	url = https://github.com/TaiwanCCyoyo/user_logger
