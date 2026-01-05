@@ -240,43 +240,42 @@ def main(logger: logging.Logger) -> None:
                 logger.warning(f"跳過{contract.name} ({contract.code}) 因為從 {start_date_str} 到 {today_str} 的資料取得失敗")
                 continue
 
-            # 合併並存檔
-            if os.path.isfile(stock_file):
-                logger.debug(f"再次讀取{contract.name} ({contract.code}) 的資料")
-                try:
-                    df_old = pd.read_csv(stock_file)
-                    logger.debug("合併資料")
-                    # concat logic
-                    df_final = pd.concat([df_old, df_new], axis=0)
-                except Exception as e:
-                    logger.error(f"{stock_file} 合併失敗: {e}")
-                    # If start_date was reset to default, valid full data is in df_new
-                    # It implies we intended to re-download everything anyway (likely due to broken header/last line)
-                    if start_date_str == config.SHIOAJI_START_DATE:
-                        logger.warning("因本為重新完整下載，舊檔讀取失敗將直接使用新資料取代。")
-                        try:
-                            os.rename(stock_file, stock_file + ".corrupted")
-                        except OSError:
-                            pass
-                        df_final = df_new
-                    else:
-                        # Partial download but merge failed. Do NOT overwrite.
-                        logger.error("舊檔讀取失敗且僅有部分新資料，停止合併以保留歷史資料。")
-                        logger.error("建議手動檢查或刪除該檔案: " + stock_file)
-                        continue  # Skip saving
-            else:
-                df_final = df_new
-
+            # 存檔與合併邏輯
             try:
-                logger.info("將資料存儲到本地股票資料")
-                df_final.to_csv(stock_file, index=False)
+                # 判斷是附加模式 (Append) 還是 覆蓋模式 (Overwrite)
+                # 如果檔案存在且不是重新完整下載 (start_date 非預設值)，則使用附加模式
+                is_append = False
+                if os.path.isfile(stock_file) and start_date_str != config.SHIOAJI_START_DATE:
+                    is_append = True
+
+                if is_append:
+                    logger.debug(f"將新資料附加到 {contract.name} ({contract.code})")
+                    # 安全檢查：讀取舊檔 Header 確保欄位順序一致
+                    try:
+                        existing_columns = pd.read_csv(stock_file, nrows=0).columns.tolist()
+                        # 重排 df_new 欄位以符合舊檔
+                        df_new = df_new[existing_columns]
+
+                        # 附加模式: header=False
+                        df_new.to_csv(stock_file, mode='a', header=False, index=False)
+
+                    except Exception as e:
+                        logger.error(f"{stock_file} 附加失敗: {e}")
+                        logger.error("建議檢查該檔案欄位是否變更，或刪除後重抓。")
+                        continue
+                else:
+                    # 全新檔案或完整重新下載
+                    logger.info("建立/覆蓋本地股票資料檔")
+                    df_new.to_csv(stock_file, mode='w', header=True, index=False)
+
             except Exception as e:
                 logger.error(f"{stock_file} 儲存失敗: {e}")
-                # 原邏輯有嘗試刪除檔案，這有點危險，暫時保留原邏輯
-                try:
-                    os.remove(stock_file)
-                except OSError:
-                    pass
+                if not is_append:
+                    # 只有在覆蓋模式失敗時才考慮刪除殘檔，附加失敗不應刪除原檔
+                    try:
+                        os.remove(stock_file)
+                    except OSError:
+                        pass
 
         end_time = datetime.datetime.now()
         logger.info(f"結束: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
