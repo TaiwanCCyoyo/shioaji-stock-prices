@@ -60,11 +60,25 @@ def process_min_file(min_file, data_dir):
     day_data.to_csv(os.path.join(data_dir, day_file), index=True)
 
 
-if __name__ == "__main__":
+def process_all():
     # 取得資料夾中的所有 _min.csv 檔案
+    if not os.path.exists(config.DATA_DIR):
+        print(f"Data directory {config.DATA_DIR} does not exist.")
+        return
+
     min_files = [f for f in os.listdir(config.DATA_DIR) if f.endswith("_min.csv")]
+
+    if not min_files:
+        print("No _min.csv files found.")
+        return
+
+    print(f"Found {len(min_files)} files to convert.")
 
     # 使用 ProcessPoolExecutor 建立 process pool
     with ProcessPoolExecutor() as executor:
         # 將任務送至 process pool 中執行
         executor.map(process_min_file, min_files, [config.DATA_DIR] * len(min_files))
+
+
+if __name__ == "__main__":
+    process_all()
