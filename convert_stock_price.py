@@ -36,8 +36,28 @@ def process_min_file(min_file: str, data_dir: str) -> str:
     min_data.ts = pd.to_datetime(min_data.ts)
     min_data.set_index("ts", inplace=True)
 
-    # 捨棄不合理資料
+    # 捨棄不合理資料 (所有數值為0的行)
     min_data = min_data[(min_data != 0).all(axis=1)]
+
+    # [新增] OHLC 邏輯檢查
+    # 檢查條件：
+    # 1. High 必須大於等於 Open, Close, Low
+    # 2. Low 必須小於等於 Open, Close, High
+    # 3. Volume 必須大於等於 0
+    invalid_mask = (
+        (min_data['High'] < min_data['Open']) |
+        (min_data['High'] < min_data['Close']) |
+        (min_data['High'] < min_data['Low']) |
+        (min_data['Low'] > min_data['Open']) |
+        (min_data['Low'] > min_data['Close']) |
+        (min_data['Low'] > min_data['High']) |
+        (min_data['Volume'] < 0)
+    )
+
+    if invalid_mask.any():
+        bad_count = invalid_mask.sum()
+        result_msg += f" [Warning] 發現 {bad_count} 筆 OHLC 邏輯錯誤資料！"
+        # 選用：可以將錯誤資料單獨存檔或記 Log，這邊先僅提示
 
     # 生成日K資料
     day_data = min_data.resample("1D").agg(
