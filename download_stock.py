@@ -7,6 +7,10 @@ import re
 import json5
 from config import config
 from dotenv import load_dotenv
+from utils.user_logger.user_logger import get_logger
+
+# Setup Logger
+logger = get_logger("shioaji.log")
 
 
 def get_contract_list(api, stock_category):
@@ -73,17 +77,17 @@ def main():
     api = sj.Shioaji()
 
     # Login
-    print("登入 Shioaji API...")
+    logger.info("登入 Shioaji API...")
     api.login(api_key=os.environ["API_KEY"], secret_key=os.environ["SECRET_KEY"])
 
     try:
         # 載入 Stock Category
-        print(f"Loading stock category from {config.STOCK_CATEGORY}")
+        logger.info(f"Loading stock category from {config.STOCK_CATEGORY}")
         if os.path.exists(config.STOCK_CATEGORY):
             with open(config.STOCK_CATEGORY, "r", encoding="utf-8") as f:
                 stock_category = json5.load(f)
         else:
-            print("Warning: Stock category file not found. Assuming empty.")
+            logger.warning("Warning: Stock category file not found. Assuming empty.")
             stock_category = {"TSE": {}, "OTC": {}}
 
         # 更新 Symbol Mapping
@@ -91,7 +95,7 @@ def main():
 
         # 取得下載清單
         contract_list = get_contract_list(api, stock_category)
-        print(f"共取得 {len(contract_list)} 檔標的")
+        logger.info(f"共取得 {len(contract_list)} 檔標的")
 
         start_time = datetime.datetime.now()
         today_date = start_time

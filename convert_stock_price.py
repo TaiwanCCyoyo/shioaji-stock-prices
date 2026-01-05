@@ -16,6 +16,12 @@ import re
 from concurrent.futures import ProcessPoolExecutor
 
 
+from utils.user_logger.user_logger import get_logger
+
+# Setup Logger
+logger = get_logger("shioaji.log")
+
+
 def process_min_file(min_file, data_dir):
     pass
     """
@@ -29,7 +35,7 @@ def process_min_file(min_file, data_dir):
         None
     """
     day_file = re.sub(r"_min\.csv$", r"_day.csv", min_file)
-    print(f"將{min_file}轉成{day_file}")
+    logger.info(f"將{min_file}轉成{day_file}")
 
     # 讀取分K資料
     min_data = pd.read_csv(os.path.join(data_dir, min_file))
@@ -63,16 +69,16 @@ def process_min_file(min_file, data_dir):
 def process_all():
     # 取得資料夾中的所有 _min.csv 檔案
     if not os.path.exists(config.DATA_DIR):
-        print(f"Data directory {config.DATA_DIR} does not exist.")
+        logger.error(f"Data directory {config.DATA_DIR} does not exist.")
         return
 
     min_files = [f for f in os.listdir(config.DATA_DIR) if f.endswith("_min.csv")]
 
     if not min_files:
-        print("No _min.csv files found.")
+        logger.info("No _min.csv files found.")
         return
 
-    print(f"Found {len(min_files)} files to convert.")
+    logger.info(f"Found {len(min_files)} files to convert.")
 
     # 使用 ProcessPoolExecutor 建立 process pool
     with ProcessPoolExecutor() as executor:
