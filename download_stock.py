@@ -1,13 +1,21 @@
-# -*- coding: utf-8 -*-
+"""
+Download Stock Module
+
+負責從 Shioaji API 下載股票分K資料 (1分K)。
+具備斷點續傳、流量控制與錯誤重試機制。
+"""
+
 import shioaji as sj
 import pandas as pd
 import os
 import datetime
 import re
 import json5
+import logging
 from config import config
 from dotenv import load_dotenv
-import logging
+
+# Re-export or just use local typing
 
 
 def get_contract_list(api: sj.Shioaji, stock_category: dict) -> list:

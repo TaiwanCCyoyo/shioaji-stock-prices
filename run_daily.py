@@ -1,3 +1,12 @@
+"""
+Run Daily Module (Entry Point)
+
+每日更新流程的總入口腳本。
+依序執行：
+1. `download_stock.main()`: 下載資料
+2. `convert_stock_price.process_all()`: 轉換資料
+"""
+
 import download_stock
 import convert_stock_price
 import datetime

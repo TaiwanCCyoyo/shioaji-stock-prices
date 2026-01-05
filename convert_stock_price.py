@@ -1,19 +1,15 @@
-# -*- coding: utf-8 -*-
 """
-描述：這個檔案用來讀取分 K 線的 cvs 檔，並生成相對應的日 K 線 cvs 檔
+Convert Stock Price Module
 
-Copyright (c) 2023-2024 李沿槱
-If you have any problem, feel free to contact: xjp0134323@gmail.com
-
-Shioaji Stock Price
-
+負責將下載的分K資料 (`_min.csv`) 轉換為日K資料 (`_day.csv`)。
+支援多進程 (Multiprocessing) 加速轉檔作業。
 """
 
 import os
-from config import config
 import logging
 import pandas as pd
 import re
+from config import config
 from concurrent.futures import ProcessPoolExecutor
 
 
@@ -26,8 +22,8 @@ def process_min_file(min_file: str, data_dir: str) -> str:
     生成單一 _min.csv 檔案對應的日K資料。
 
     Args:
-        min_file (str): 輸入的 _min.csv 檔案名稱。
-        data_dir (str): 包含分K資料檔案的資料夾。
+        min_file(str): 輸入的 _min.csv 檔案名稱。
+        data_dir(str): 包含分K資料檔案的資料夾。
 
     Returns:
         None
