@@ -15,7 +15,59 @@ import logging
 from config import config
 from dotenv import load_dotenv
 
+
 # Re-export or just use local typing
+
+def get_last_timestamp_from_csv(file_path: str, date_col_name: str = 'ts') -> datetime.datetime:
+    """
+    Efficiently read the last timestamp from a CSV file without loading the whole file.
+    Reads the header to find `date_col_name` index, then reads the last line.
+    """
+    try:
+        with open(file_path, 'rb') as f:
+            # 1. Read Header
+            header_line = f.readline().decode('utf-8').strip()
+            if not header_line:
+                return None
+
+            headers = header_line.split(',')
+            try:
+                date_col_index = headers.index(date_col_name)
+            except ValueError:
+                return None
+
+            # 2. Seek to End
+            try:
+                f.seek(-2, os.SEEK_END)
+                while f.read(1) != b'\n':
+                    f.seek(-2, os.SEEK_CUR)
+            except OSError:
+                # File is too small (e.g. only header or empty)
+                return None
+
+            last_line = f.readline().decode('utf-8')
+            if not last_line:
+                return None
+
+            # Avoid parsing header as data if file has only 1 line
+            if last_line.strip() == header_line:
+                return None
+
+            # 3. Parse Last Line
+            parts = last_line.strip().split(',')
+            ts_str = parts[date_col_index]
+
+            # Handle numeric timestamps
+            try:
+                # Try converting to float first, then int
+                ts_val = int(float(ts_str))
+                return pd.to_datetime(ts_val)
+            except ValueError:
+                # Not a number, try parsing as string
+                return pd.to_datetime(ts_str)
+
+    except (IOError, IndexError, ValueError):
+        return None
 
 
 def get_contract_list(api: sj.Shioaji, stock_category: dict) -> list:
@@ -120,15 +172,19 @@ def main(logger: logging.Logger) -> None:
             start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
 
             if os.path.isfile(stock_file):
-                logger.debug(f"讀取{contract.name} ({contract.code}) 的資料")
+                logger.debug(f"讀取{contract.name} ({contract.code}) 的最後一筆資料時間")
                 try:
-                    df = pd.read_csv(stock_file)
-                    df.ts = pd.to_datetime(df.ts)
-                    if not df.empty:
+                    # Optimization: Read only the last line to get timestamp
+                    last_ts = get_last_timestamp_from_csv(stock_file, date_col_name='ts')
+
+                    if last_ts:
                         # 從最後一筆資料的隔天開始抓
-                        last_ts = df.iloc[-1]["ts"]
                         start_date_str = (last_ts + datetime.timedelta(days=1)).strftime("%Y-%m-%d")
                         start_date = datetime.datetime.strptime(f"{start_date_str} 08:00", "%Y-%m-%d %H:%M")
+                    else:
+                        # File might be empty or header only
+                        pass
+
                 except Exception as e:
                     logger.warning(f"警告: {stock_file} 讀取失敗，可能是檔案損毀 ({e})")
                     logger.info("將重新下載此檔完整資料...")
@@ -145,11 +201,8 @@ def main(logger: logging.Logger) -> None:
                     start_date = datetime.datetime.strptime(start_date_str, "%Y-%m-%d")
 
             # 若 start_date 已經大於等於今天，代表無需更新
-            # Note: start_date 包含時間若為 08:00，today_date 為當下時間。
-            # 比較時若 start_date day >= today day?
-            # 原邏輯: if start_date >= today_date:
             if start_date >= today_date:
-                logger.info(f"跳過{contract.name} ({contract.code}) 因為已經擁有 {start_date_str} 之前的資料")
+                logger.debug(f"跳過{contract.name} ({contract.code}) 因為已經擁有 {start_date_str} 之前的資料")
                 continue
 
             success = False
@@ -197,7 +250,20 @@ def main(logger: logging.Logger) -> None:
                     df_final = pd.concat([df_old, df_new], axis=0)
                 except Exception as e:
                     logger.error(f"{stock_file} 合併失敗: {e}")
-                    raise e
+                    # If start_date was reset to default, valid full data is in df_new
+                    # It implies we intended to re-download everything anyway (likely due to broken header/last line)
+                    if start_date_str == config.SHIOAJI_START_DATE:
+                        logger.warning("因本為重新完整下載，舊檔讀取失敗將直接使用新資料取代。")
+                        try:
+                            os.rename(stock_file, stock_file + ".corrupted")
+                        except OSError:
+                            pass
+                        df_final = df_new
+                    else:
+                        # Partial download but merge failed. Do NOT overwrite.
+                        logger.error("舊檔讀取失敗且僅有部分新資料，停止合併以保留歷史資料。")
+                        logger.error("建議手動檢查或刪除該檔案: " + stock_file)
+                        continue  # Skip saving
             else:
                 df_final = df_new
 

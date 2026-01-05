@@ -13,3 +13,6 @@ data/stock_symbol_mapping.json5
 
 # uv
 .venv
+
+# zip
+*.zip
