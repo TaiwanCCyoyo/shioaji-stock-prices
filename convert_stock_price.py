@@ -56,8 +56,27 @@ def process_min_file(min_file: str, data_dir: str) -> str:
 
     if invalid_mask.any():
         bad_count = invalid_mask.sum()
-        result_msg += f" [Warning] 發現 {bad_count} 筆 OHLC 邏輯錯誤資料！"
-        # 選用：可以將錯誤資料單獨存檔或記 Log，這邊先僅提示
+        # 取得錯誤資料的時間點 (前 2 筆)
+        bad_rows = min_data[invalid_mask]
+
+        details = []
+        for ts in bad_rows.index[:2]:
+            dt_str = ts.strftime("%Y-%m-%d %H:%M")
+            try:
+                # 取得原始數值 (nanoseconds) 供使用者搜尋 CSV
+                ts_val = ts.value
+                details.append(f"{dt_str} (TS={ts_val})")
+            except Exception:
+                details.append(dt_str)
+
+        ts_str = ", ".join(details)
+        if bad_count > 2:
+            ts_str += "..."
+
+        result_msg += f" [Warning] {bad_count}筆錯誤: {ts_str}"
+
+        # 剔除異常資料，避免污染日K
+        min_data = min_data[~invalid_mask]
 
     # 生成日K資料
     day_data = min_data.resample("1D").agg(
