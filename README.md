@@ -65,6 +65,19 @@ python run_daily.py
 
 建議使用 Windows Task Scheduler 設定每日下午 (如 15:00) 自動執行 `run_daily.py`。
 
+## 🛡️ 資料安全與備份 (Data Safety)
+
+本專案採用 **高效能附加寫入 (Append Mode)** 架構，為了確保長期資料安全，建議您定期備份原始資料。
+
+我們提供了一個備份工具：
+
+```bash
+python backup_data.py
+```
+
+這將會把 `data/` 目錄下的所有資料壓縮備份到 `backups/` 資料夾中（檔名包含時間戳記）。
+建議每週執行一次此腳本。
+
 ## 📝 License
 
 本專案採用 Apache License 2.0。

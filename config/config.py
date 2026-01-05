@@ -18,3 +18,6 @@ SHIOAJI_START_DATE = '2018-12-07'
 # 第一行寫 API key
 # 第二行寫 Secret key
 API_KEY = 'api.key'
+
+# BACKUP_DIR 用於定義預設的備份目錄
+BACKUP_DIR = "backups"
